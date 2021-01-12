@@ -18,12 +18,16 @@ let package = Package(
             targets: ["BookishImporter"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/elegantchaos/XCTestExtensions", from: "1.1.2")
+        .package(url: "https://github.com/elegantchaos/Files.git", from: "1.1.4"),
+        .package(url: "https://github.com/elegantchaos/Localization.git", from: "1.0.3"),
+        .package(url: "https://github.com/elegantchaos/Logger.git", from: "1.5.7"),
+        .package(url: "https://github.com/elegantchaos/ISBN", from: "1.0.0"),
+            .package(url: "https://github.com/elegantchaos/XCTestExtensions.git", from: "1.1.2"),
     ],
     targets: [
         .target(
             name: "BookishImporter",
-            dependencies: []),
+            dependencies: ["Files", "ISBN", "Localization" ,"Logger"]),
         .testTarget(
             name: "BookishImporterTests",
             dependencies: ["BookishImporter", "XCTestExtensions"]),
