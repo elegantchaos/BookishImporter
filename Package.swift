@@ -10,7 +10,7 @@ import PackageDescription
 let package = Package(
     name: "BookishImporter",
     platforms: [
-        .macOS(.v10_13)
+        .macOS(.v10_13), .iOS(.v13)
     ],
     products: [
         .library(
