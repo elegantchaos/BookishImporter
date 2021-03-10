@@ -7,7 +7,7 @@ import Foundation
 import ISBN
 import Logger
 
-let deliciousChannel = Logger("DeliciousImporter")
+let deliciousChannel = Channel("DeliciousImporter")
 
 extension Dictionary {
     func nonZeroDouble(forKey key: Key) -> Double? {
@@ -56,6 +56,8 @@ public class DeliciousLibraryImportSession: URLImportSession {
         public let images: [URL]
         
         init?(from record: [String:Any], info: Validated) {
+            deliciousChannel.log("Started import")
+            
             if let uuid = record["uuidString"] as? String {
                 id = uuid
             } else if let uuid = record["foreignUUIDString"] as? String {

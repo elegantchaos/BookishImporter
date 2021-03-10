@@ -4,6 +4,9 @@
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 import Foundation
+import Logger
+
+let importerChannel = Channel("com.elegantchaos.bookish.Importer")
 
 public class ImportManager {
     private var importers: [String:Importer] = [:]
@@ -23,6 +26,7 @@ public class ImportManager {
     
     public func register(_ importersToRegister: [Importer]) {
         for importer in importersToRegister {
+            importerChannel.log("Registered \(importer.name)")
             importers[type(of: importer).identifier] = importer
         }
     }
