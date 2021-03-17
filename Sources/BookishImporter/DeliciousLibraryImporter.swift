@@ -152,15 +152,17 @@ public class DeliciousLibraryImportSession: URLImportSession {
     
     override func run() {
         monitor?.session(self, willImportItems: list.count)
-        var item = 0
         for record in list {
             if let info = validate(record) {
-                monitor?.session(self, willImportItem: info.title, index: item, of: list.count)
                 if let book = Book(from: record, info: info) {
+                    monitor?.session(self, didImport: book)
                     books[book.id] = book
+                } else {
+                    print("failed to make book from \(record)")
                 }
+            } else {
+                print("failed to validate book from \(record)")
             }
-            item += 1
         }
         monitor?.sessionDidFinish(self)
     }
