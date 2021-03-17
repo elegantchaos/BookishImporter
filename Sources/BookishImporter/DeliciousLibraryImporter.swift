@@ -117,7 +117,6 @@ public class DeliciousLibraryImportSession: URLImportSession {
     let formatsToSkip = ["Audio CD", "Audio CD Enhanced", "Audio CD Import", "Video Game", "VHS Tape", "VideoGame", "DVD"]
     
     let list: RecordList
-    public var books: [String:Book] = [:]
 
     override init?(importer: Importer, url: URL, monitor: ImportMonitor?) {
         // check we can parse the xml
@@ -151,17 +150,17 @@ public class DeliciousLibraryImportSession: URLImportSession {
     }
     
     override func run() {
+        let monitor = self.monitor
         monitor?.session(self, willImportItems: list.count)
         for record in list {
-            if let info = validate(record) {
+            if let info = self.validate(record) {
                 if let book = Book(from: record, info: info) {
                     monitor?.session(self, didImport: book)
-                    books[book.id] = book
                 } else {
-                    print("failed to make book from \(record)")
+                    deliciousChannel.log("failed to make book from \(record)")
                 }
             } else {
-                print("failed to validate book from \(record)")
+                deliciousChannel.log("skipped non-book \(record["title"] ?? record)")
             }
         }
         monitor?.sessionDidFinish(self)
