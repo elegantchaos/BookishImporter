@@ -9,10 +9,65 @@ import Logger
 
 let deliciousChannel = Channel("DeliciousImporter")
 
-extension Dictionary {
-    func nonZeroDouble(forKey key: Key) -> Double? {
-        guard let value = self[key] as? Double, value != 0 else { return nil }
-        return value
+extension Dictionary where Key == String, Value == Any {
+    mutating func extractNonZeroDouble(forKey key: Key, as asKey: Key? = nil, from source: inout Self) {
+        if let value = self[key] as? Double, value != 0 {
+            self[asKey ?? key] = value
+        }
+        source.removeValue(forKey: key)
+    }
+
+    mutating func extractNonZeroInt(forKey key: Key, as asKey: Key? = nil, from source: inout Self) {
+        if let value = self[key] as? Int, value != 0 {
+            self[asKey ?? key] = value
+        }
+        source.removeValue(forKey: key)
+    }
+
+    mutating func extractString(forKey key: Key, as asKey: Key? = nil, from source: inout Self) {
+        if let string = source[key] as? String {
+            source.removeValue(forKey: key)
+            self[asKey ?? key] = string
+        }
+    }
+
+    mutating func extractDate(forKey key: Key, as asKey: Key? = nil, from source: inout Self) {
+        if let string = source[key] as? Date {
+            source.removeValue(forKey: key)
+            self[asKey ?? key] = string
+        }
+    }
+
+    mutating func extractStringList(forKey key: Key, separator: Character = "\n", as asKey: Key? = nil, from source: inout Self) {
+        if let string = source[key] as? String {
+            source.removeValue(forKey: key)
+            let trimSet = CharacterSet.whitespacesAndNewlines
+            self[asKey ?? key] = string.split(separator: separator).map({ $0.trimmingCharacters(in: trimSet) })
+        }
+    }
+    
+    mutating func extractISBN(as asKey: Key = .isbnKey, from source: inout Self) {
+        if let ean = source["ean"] as? String, ean.isISBN13 {
+            source.removeValue(forKey: "ean")
+            self[asKey] = ean
+        } else if let value = source["isbn"] as? String {
+            let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            source.removeValue(forKey: "isbn")
+            self[.isbnKey] = trimmed.isbn10to13
+        }
+    }
+
+    mutating func extractID(from source: inout Self) -> String {
+        if let uuid = source["uuidString"] as? String {
+            source.removeValue(forKey: "uuidString")
+            return uuid
+        } else if let uuid = source["foreignUUIDString"] as? String {
+            source.removeValue(forKey: "foreignUUIDString")
+            return uuid
+        } else {
+            return "delicious-import-\(source["title"]!)"
+        }
+
     }
 }
 
@@ -37,78 +92,50 @@ public class DeliciousLibraryImportSession: URLImportSession {
     public struct Book {
         public let id: String
         public let title: String
-        public let subtitle: String?
-        public let isbn: String?
-        public let asin: String?
-        public let format: String?
-        
-        public let classification: String?
-        
-        public let added: Date?
-        public let modified: Date?
-        public let published: Date?
-        
-        public let height: Double?
-        public let width: Double?
-        public let length: Double?
-        
-        public let raw: [String:Any]
+        public let properties: [String:Any]
         public let images: [URL]
         
-        init?(from record: [String:Any], info: Validated) {
+        init?(info: Validated) {
             deliciousChannel.log("Started import")
             
-            if let uuid = record["uuidString"] as? String {
-                id = uuid
-            } else if let uuid = record["foreignUUIDString"] as? String {
-                id = uuid
-            } else {
-                id = "delicious-import-\(info.title)"
-            }
+            var unprocessed = info.properties
+            var processed: [String:Any] = [:]
             
+            id = processed.extractID(from: &unprocessed)
             title = info.title
-            subtitle = record["subtitle"] as? String
+            processed[.formatKey] = info.format
             
-            if let ean = record["ean"] as? String, ean.isISBN13 {
-                isbn = ean
-            } else if let value = record["isbn"] as? String {
-                let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-                isbn = trimmed.isbn10to13
-            } else {
-                isbn = nil
-            }
-            
-            height = record.nonZeroDouble(forKey: "boxHeightInInches")
-            width = record.nonZeroDouble(forKey: "boxWidthInInches")
-            length = record.nonZeroDouble(forKey: "boxLengthInInches")
-            
-            asin = record["asin"] as? String
-            classification = record["deweyDecimal"] as? String
-            
-            added = record["creationDate"] as? Date
-            modified = record["lastModificationDate"] as? Date
-            published = record["publishDate"] as? Date
-            
-            raw = record
-            self.format = info.format
-            
+            processed.extractString(forKey: "subtitle", as: .subtitleKey, from: &unprocessed)
+            processed.extractString(forKey: "asin", as: .asinKey, from: &unprocessed)
+            processed.extractString(forKey: "dewey", as: .deweyKey, from: &unprocessed)
+            processed.extractString(forKey: "seriesSingularString", as: .seriesKey, from: &unprocessed)
+            processed.extractISBN(from: &unprocessed)
+            processed.extractNonZeroDouble(forKey: "boxHeightInInches", as: .heightKey, from: &unprocessed)
+            processed.extractNonZeroDouble(forKey: "boxWidthInInches", as: .widthKey, from: &unprocessed)
+            processed.extractNonZeroDouble(forKey: "boxLengthInInches", as: .lengthKey, from: &unprocessed)
+            processed.extractNonZeroInt(forKey: "pages", as: .pagesKey, from: &unprocessed)
+            processed.extractDate(forKey: "creationDate", as: .addedDateKey, from: &unprocessed)
+            processed.extractDate(forKey: "lastModificationDate", as: .modifiedDateKey, from: &unprocessed)
+            processed.extractDate(forKey: "publishDate", as: .publishedDateKey, from: &unprocessed)
+            processed.extractStringList(forKey: "creatorsCompositeString", as: .authorsKey, from: &unprocessed)
+            processed.extractStringList(forKey: "publishersCompositeString", as: .publishersKey, from: &unprocessed)
+            processed.extractStringList(forKey: "genresCompositeString", as: .genresKey, from: &unprocessed)
+            processed.extractStringList(forKey: "illustratorsCompositeString", as: .illustratorsKey, from: &unprocessed)
+
             var urls: [URL] = []
             for key in ["coverImageLargeURLString", "coverImageMediumURLString", "coverImageSmallURLString"] {
-                if let string = record[key] as? String, let url = URL(string: string) {
+                if let string = unprocessed[key] as? String, let url = URL(string: string) {
                     urls.append(url)
+                    unprocessed.removeValue(forKey: key)
                 }
             }
-            images = urls
 
-            //                process(creators: creators, for: book)
-            //
-            //                if let publishers = record["publishersCompositeString"] as? String, !publishers.isEmpty {
-            //                    process(publishers: publishers, for: book)
-            //                }
-            //
-            //                if let series = record["seriesSingularString"] as? String, !series.isEmpty {
-            //                    process(series: series, position: 0, for: book)
-            //                }
+            for (key, value) in unprocessed {
+                processed["delicious.\(key)"] = value
+            }
+            
+            images = urls
+            properties = processed
         }
     }
     
@@ -136,7 +163,7 @@ public class DeliciousLibraryImportSession: URLImportSession {
     struct Validated {
         let format: String?
         let title: String
-        let creators: String
+        let properties: [String:Any]
     }
     
     func validate(_ record: Record) -> Validated? {
@@ -144,9 +171,11 @@ public class DeliciousLibraryImportSession: URLImportSession {
         guard format == nil || !formatsToSkip.contains(format!) else { return nil }
         let type = record["type"] as? String
         guard type == nil || !formatsToSkip.contains(type!) else { return nil }
-        guard let title = record["title"] as? String, let creators = record["creatorsCompositeString"] as? String else { return nil }
-        
-        return Validated(format: format, title: title, creators: creators)
+        guard let title = record["title"] as? String else { return nil }
+        var properties = record
+        properties.removeValue(forKey: "title")
+        properties.removeValue(forKey: "formatSingularString")
+        return Validated(format: format, title: title, properties: properties)
     }
     
     override func run() {
@@ -154,7 +183,7 @@ public class DeliciousLibraryImportSession: URLImportSession {
         monitor?.session(self, willImportItems: list.count)
         for record in list {
             if let info = self.validate(record) {
-                if let book = Book(from: record, info: info) {
+                if let book = Book(info: info) {
                     monitor?.session(self, didImport: book)
                 } else {
                     deliciousChannel.log("failed to make book from \(record)")
